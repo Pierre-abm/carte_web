@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>WebMap avec interrogation multi-couches et légendes</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+    }
+
+    #header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 35px;  
+      background-color: #4b805c;
+      display: flex;              
+      align-items: center;        
+      padding: 0 10px;
+      z-index: 9999;
+    }
+
+    #header h1 {
+  flex: 1; 
+  margin-left: 10%;                  
+  text-align: center;         
+  font-family: Arial, Helvetica, sans-serif;
+  color: #f5f5f5;
+  font-size: 18px;
+  margin: 0;
+  padding: 0;
+  letter-spacing: 2px; 
+}
+    #info-button {
+      padding: 5px 15px;
+      margin-right: 2%;
+      font-size: 14px;
+      cursor: pointer;
+      border: none;
+      background-color: #ffffff;
+      color: #4b805c;
+      font-weight: bold;
+      border-radius: 4px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.3);
+    }
+
+    #map {
+      width: 100%;
+      height: calc(100% - 35px);
+      margin-top: 35px;
+    }
+
+    #legend-toggle {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      z-index: 9999; 
+      background: #fff;
+      padding: 6px 10px;
+      cursor: pointer;
+      border-radius: 5px;
+      font-weight: bold;
+      box-shadow: 0 0 4px rgba(0,0,0,0.4);
+      border: none;
+    }
+
+    .legend {
+      background: rgba(255, 255, 255, 1);
+      padding: 6px 8px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.2);
+      border-radius: 5px;
+      font: 14px/16px Arial, Helvetica, sans-serif;
+    }
+
+    .legend h4 {
+      margin: 0 0 4px;
+    }
+
+    .legend p {
+      margin: 4px 0;
+      font-weight: bold;
+    }
+
+    .legend-ndvi {
+      max-width: 150px;
+      height: auto;
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    .leaflet-bottom.leaflet-left .legend {
+      margin-bottom: 50px;
+    }
+
+    #info-content {
+      display: none; 
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: #f7f7f7;
+      border: 1px solid #ccc;
+      padding: 5px;
+      z-index: 10000;
+      font-family: Arial, Helvetica, sans-serif;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      border-radius: 8px;
+      width: 500px;
+      max-width: 80%;
+    }
+
+    #close-info {
+      float: right;
+      cursor: pointer;
+      background: transparent;
+      border: none;
+      color: #f5f5f5;
+      font-size: 25px;
+      align-items: center;
+    }
+
+    .popup-title {
+      text-align: center;
+      background-color: #4b805c; 
+      color: #ffffff;            
+      font-size: 16px;
+      padding: 10px;
+      margin: 0 0 10px 0;
+      border-radius: 4px;    
+      letter-spacing: 1px;      
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    #info-content p {
+  letter-spacing: 1px;  
+  line-height: 1.4;  
+}
+
+#info-content ul {
+  letter-spacing: 1px;  
+  line-height: 1.2;     
+}
+
+#slider-container {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  background: #ffffff;
+  padding: 6px 10px;
+  border-radius: 5px;
+  box-shadow: 0 0 4px rgba(0,0,0,0.4);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 14px;
+  display: flex; 
+  align-items: center;
+  gap: 8px; 
+}
+
+#slider-container label {
+  color: #1a1a1a; 
+  font-weight: bold;
+}
+
+#slider-opacity {
+  width: 180px;
+  cursor: pointer;
+  accent-color: #4b805c;
+  background: #d7d7d7;   
+  height: 4px;          
+  border-radius: 4px;
+  outline: none;        
+}
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <h1>CARTOGRAPHIE DES ESSENCES FORESTIÈRES SUR L'AGGLOMERATION TOULOUSAINE</h1>
+  <button id="info-button">i</button>
+</div>
+
+<div id="map"></div>
+
+<div id="info-content">
+    <button id="close-info">X</button>
+    
+    <h2 class="popup-title">CONTEXTE DE LA CARTE WEB</h2>
+
+    <p style="text-align: justify;">
+      Cette carte web a été réalisée dans le cadre de l'unité d'enseignement WebMapping du master SIGMA.
+    </p>
+    <p style="text-align: justify;">
+      L'objectif ici est d'identifier les formations gardant une activité photosynthétique 
+      en hiver par la comparaison d'une carte des essence obtenue par classification supervisée et du NDVI.
+    </p>
+    <p style="text-align: justify;">
+      Données mobilisées :
+    </p>
+    <ul style="text-align: justify; margin: 0; padding-left: 20px;">
+      <li>Formations végétales obtenues à partir d'une classification supervisée</li>
+      <li>NDVI du 9 février 2023 sur l'emprise de ces formations</li>
+    </ul>
+</div>
+
+<button id="legend-toggle">Afficher la légende</button>
+
+<div id="slider-container">
+    <label for="slider-opacity">Afficher progressivement le NDVI</label>
+    <input
+      id="slider-opacity"
+      type="range"
+      min="0"
+      max="1"
+      step="0.01"
+      value="0"
+    />
+  </div>
+
+<script>
+  var map = L.map('map', {
+    center: [43.6045, 1.444],
+    zoom: 10,
+    zoomControl: false  
+  });
+
+  var osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '© OpenStreetMap'
+  });
+
+  var googleSat = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+    subdomains: ['mt0','mt1','mt2','mt3'],
+    attribution: 'Données cartographiques ©2023 Google'
+  });
+
+  osmLayer.addTo(map);
+
+  map.createPane('paneNDVI');
+  map.getPane('paneNDVI').style.zIndex = 400;
+
+  var wmsNDVI = L.tileLayer.wms("https://www.geotests.net/geoserver/pierreabm/wms", {
+    layers: 'pierreabm:ndvi_hiver',
+    format: 'image/png',
+    transparent: true,
+    version: '1.1.1',
+    pane: 'paneNDVI',
+    attribution: "Données Sentinel-2"
+  }).addTo(map);
+
+  map.createPane('paneEssences');
+  map.getPane('paneEssences').style.zIndex = 401;
+
+  var wmsEssences = L.tileLayer.wms("https://www.geotests.net/geoserver/pierreabm/wms", {
+    layers: 'pierreabm:carte_essence',
+    format: 'image/png',
+    transparent: true,
+    version: '1.1.1',
+    pane:'paneEssences',
+    attribution: "Données Sentinel-2"
+  }).addTo(map);
+
+  var baseMaps = { 
+    "OpenStreetMap": osmLayer,
+    "Google Satellite": googleSat 
+  };
+  var overlayMaps = {
+    "Essences": wmsEssences,
+    "NDVI Hiver": wmsNDVI
+  };
+
+  L.control.layers(baseMaps, overlayMaps).addTo(map);
+
+  var essenceLabels = {
+    0:  "Aucune essence",
+    11: "Autres feuillus",
+    12: "Chêne",
+    13: "Robinier",
+    14: "Peupleraie",
+    21: "Autres conifères",
+    22: "Autres Pins",
+    23: "Douglas",
+    24: "Pin laricio ou Pin noir",
+    25: "Pin maritime"
+  };
+  function getFeatureInfoData(layer, e) {
+    const size = map.getSize();
+    const point = map.latLngToContainerPoint(e.latlng, map.getZoom());
+    const { lng, lat } = map.getBounds().getSouthWest();
+    const { lng: lng2, lat: lat2 } = map.getBounds().getNorthEast();
+    const bbox = [lng, lat, lng2, lat2].join(',');
+
+    const baseUrl = "https://www.geotests.net/geoserver/pierreabm/wms";
+    const params = new URLSearchParams({
+        service: "WMS",
+        version: "1.1.1",
+        request: "GetFeatureInfo",
+        layers: `pierreabm:${layer}`,
+        query_layers: `pierreabm:${layer}`,
+        info_format: "application/json",
+        srs: "EPSG:4326",
+        bbox: bbox,
+        width: size.x,
+        height: size.y,
+        x: Math.round(point.x),
+        y: Math.round(point.y)
+    });
+
+    return fetch(`${baseUrl}?${params}`)
+        .then(response => response.json())
+        .then(data => {
+            if (!data.features || data.features.length === 0) return "Aucune donnée";
+            
+            const properties = data.features[0].properties;
+            let content = "";
+            let essenceAbsent = false;
+
+            if (layer === "ndvi_hiver") {
+                let ndviValue = properties.GRAY_INDEX;
+                if (ndviValue === -3.4028234663852886e+38 || isNaN(ndviValue)) ndviValue = 0;
+                content = `NDVI : <b>${essenceAbsent ? 0 : ndviValue}</b>`;
+            } else if (layer === "carte_essence") {
+                const libelle = essenceLabels[properties.GRAY_INDEX] || `Valeur inconnue (${properties.GRAY_INDEX})`;
+                content = `Essence : <b>${libelle}</b>`;
+                essenceAbsent = !essenceLabels[properties.GRAY_INDEX];
+            }
+            return content;
+        })
+        .catch(err => {
+            console.error(`Erreur GetFeatureInfo (${layer}):`, err);
+            return `Erreur lors de la récupération des données ${layer}.`;
+        });
+}
+
+function showPopup(e) {
+    Promise.all([getFeatureInfoData('carte_essence', e), getFeatureInfoData('ndvi_hiver', e)])
+        .then(([essenceContent, ndviContent]) => {
+            L.popup()
+                .setLatLng(e.latlng)
+                .setContent(`${essenceContent}<br>${ndviContent}`)
+                .openOn(map);
+        })
+        .catch(err => {
+            console.error("Erreur lors de la récupération des données:", err);
+        });
+}
+
+map.on('click', showPopup);
+
+function generateLegendUrl(layer) {
+    return `https://www.geotests.net/geoserver/pierreabm/wms?REQUEST=GetLegendGraphic&VERSION=1.0.0&FORMAT=image/png&LAYER=pierreabm:${layer}`;
+}
+
+const legendUrls = {
+    essences: generateLegendUrl("carte_essence"),
+    ndvi: generateLegendUrl("ndvi_hiver")
+};
+
+const legendControl = L.control({ position: 'bottomleft' });
+
+legendControl.onAdd = function () {
+    const legendDiv = L.DomUtil.create('div', 'legend');
+    legendDiv.innerHTML = `
+        <p>Essences forestières</p><img src="${legendUrls.essences}" alt="Légende Essences" />
+        <p>NDVI en février</p><img class="legend-ndvi" src="${legendUrls.ndvi}" alt="Légende NDVI" />
+    `;
+    legendDiv.style.display = 'none';
+    return legendDiv;
+};
+
+legendControl.addTo(map);
+
+document.getElementById('legend-toggle').addEventListener('click', function () {
+    const legendDiv = document.querySelector('.legend');
+    if (legendDiv) {
+        legendDiv.style.display = legendDiv.style.display === 'none' ? 'block' : 'none';
+    }
+});
+
+document.getElementById('info-button').addEventListener('click', function () {
+    document.getElementById('info-content').style.display = 'block';
+});
+
+document.getElementById('close-info').addEventListener('click', function () {
+    document.getElementById('info-content').style.display = 'none';
+});
+
+document.getElementById('slider-opacity').addEventListener('input', function () {
+    const opacity = parseFloat(this.value);
+    wmsEssences.setOpacity(1 - opacity);
+});
+</script>
+
+</body>
+</html>
